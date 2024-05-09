@@ -55,8 +55,10 @@ alpm_pkg_xdata_t SYMEXPORT *alpm_pkg_parse_xdata(const char *string) {
 
 int SYMEXPORT alpm_pkg_xdata_update(alpm_pkg_t *pkg, alpm_list_t *xdata_lst) {
 	ASSERT(pkg != NULL, return -1);
-	ASSERT(xdata_lst != NULL, return -1);
 	pkg->handle->pm_errno = ALPM_ERR_OK;
+	if(xdata_lst == NULL) {
+		return 0;
+	}
 
 	alpm_list_t *pkg_xdata_lst = alpm_pkg_get_xdata(pkg);
 	for(alpm_list_t *i = xdata_lst; i; i = alpm_list_next(xdata_lst)) {
