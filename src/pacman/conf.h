@@ -126,6 +126,7 @@ typedef struct __config_t {
 	alpm_list_t *noupgrade;
 	alpm_list_t *noextract;
 	alpm_list_t *overwrite_files;
+	alpm_list_t *xdata;
 	char *xfercommand;
 	char **xfercommand_argv;
 	size_t xfercommand_argc;
@@ -212,7 +213,8 @@ enum {
 	OP_DOWNLOADONLY,
 	OP_REFRESH,
 	OP_ASSUMEINSTALLED,
-	OP_DISABLEDLTIMEOUT
+	OP_DISABLEDLTIMEOUT,
+	OP_XDATA
 };
 
 /* clean method */

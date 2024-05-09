@@ -1208,6 +1208,8 @@ static int load_packages(alpm_handle_t *handle, alpm_list_t **data,
 			continue;
 		}
 		free(filepath);
+		/* update extended data field */
+		alpm_pkg_xdata_update(pkgfile, spkg->xdata);
 		/* copy over the install reason */
 		pkgfile->reason = spkg->reason;
 		/* copy over validation method */

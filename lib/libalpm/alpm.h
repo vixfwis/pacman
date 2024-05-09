@@ -2658,6 +2658,25 @@ int alpm_pkg_get_validation(alpm_pkg_t *pkg);
  */
 alpm_list_t *alpm_pkg_get_xdata(alpm_pkg_t *pkg);
 
+/** Updates the extended data field of a package. Will overwrite
+ * xdata kv-pairs with same name
+ * @param pkg a pointer to package
+ * @param xdata_lst a reference to a list of alpm_pkg_xdata_t objects
+ * @return 0 on success, -1 on error (pm_errno is set accordingly)
+ */
+int alpm_pkg_xdata_update(alpm_pkg_t *pkg, alpm_list_t *xdata_lst);
+
+/** Parse string into an extended data structure
+ * @param string a pointer to string
+ * @return a reference to xdata on success, NULL on failure
+ */
+alpm_pkg_xdata_t *alpm_pkg_parse_xdata(const char *string);
+
+/** Free an extended data structure.
+ * @param xdata a reference to an xdata to free
+ */
+void alpm_pkg_xdata_free(alpm_pkg_xdata_t *xdata);
+
 /** Returns whether the package has an install scriptlet.
  * @return 0 if FALSE, TRUE otherwise
  */

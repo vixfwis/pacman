@@ -193,6 +193,8 @@ static void usage(int op, const char * const myname)
 				          "                       overwrite conflicting files (can be used more than once)\n"));
 				addlist(_("      --asdeps         install packages as non-explicitly installed\n"));
 				addlist(_("      --asexplicit     install packages as explicitly installed\n"));
+				addlist(_("      --xdata <key>=<value>\n"
+						  "                       set extended data for package\n"));
 				addlist(_("      --ignore <pkg>   ignore a package upgrade (can be used more than once)\n"));
 				addlist(_("      --ignoregroup <grp>\n"
 				          "                       ignore a group upgrade (can be used more than once)\n"));
@@ -759,6 +761,9 @@ static int parsearg_upgrade(int opt)
 		case OP_NEEDED:
 			config->flags |= ALPM_TRANS_FLAG_NEEDED;
 			break;
+		case OP_XDATA:
+			parsearg_util_addlist(&(config->xdata));
+			break;
 		case OP_IGNORE:
 			parsearg_util_addlist(&(config->ignorepkg));
 			break;
@@ -970,6 +975,7 @@ static int parseargs(int argc, char *argv[])
 		{"ignoregroup", required_argument, 0, OP_IGNOREGROUP},
 		{"needed",     no_argument,       0, OP_NEEDED},
 		{"asexplicit",     no_argument,   0, OP_ASEXPLICIT},
+		{"xdata",     required_argument,   0, OP_XDATA},
 		{"arch",       required_argument, 0, OP_ARCH},
 		{"print-format", required_argument, 0, OP_PRINTFORMAT},
 		{"gpgdir",     required_argument, 0, OP_GPGDIR},

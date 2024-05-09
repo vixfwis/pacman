@@ -822,6 +822,29 @@ int sync_prepare_execute(void)
 		goto cleanup;
 	}
 
+	/* Step 2.1: set extended data fields */
+	alpm_list_t *xdata_lst = NULL;
+	for(i = config->xdata; i; i = alpm_list_next(i)) {
+		const char *xdata_arg = i->data;
+		alpm_pkg_xdata_t *xdata = alpm_pkg_parse_xdata(xdata_arg);
+		if(xdata == NULL) {
+			pm_printf(ALPM_LOG_ERROR, _("failed to parse extended data field: %s\n"), xdata_arg);
+			retval = 1;
+			goto cleanup;
+		}
+		alpm_list_append(&xdata_lst, xdata);
+	}
+	for(alpm_list_t *j = packages; j; j = alpm_list_next(j)) {
+		alpm_pkg_t *pkg = j->data;
+		if(alpm_pkg_xdata_update(pkg, xdata_lst) != 0) {
+			alpm_errno_t err = alpm_errno(config->handle);
+			pm_printf(ALPM_LOG_ERROR, _("failed to update extended data fields (%s)\n"),
+					alpm_strerror(err));
+		}
+	}
+	alpm_list_free_inner(xdata_lst, (alpm_list_fn_free)alpm_pkg_xdata_free);
+	alpm_list_free(xdata_lst);
+
 	/* Step 3: actually perform the operation */
 	if(config->print) {
 		print_packages(packages);
