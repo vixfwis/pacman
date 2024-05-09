@@ -548,9 +548,15 @@ int dump_pkg_search(alpm_db_t *db, alpm_list_t *targets, int show_status)
 	}
 
 	/* if we have a targets list, search for packages matching it */
-	if(targets) {
-		if(alpm_db_search(db, targets, &searchlist) != 0) {
-			return -1;
+	if(targets || config->xdata) {
+		if(config->xdata) {
+			if(alpm_db_search_xdata(db, targets, config->xdata, &searchlist) != 0) {
+				return -1;
+			}
+		}else {
+			if(alpm_db_search(db, targets, &searchlist) != 0) {
+				return -1;
+			}
 		}
 		freelist = 1;
 	} else {

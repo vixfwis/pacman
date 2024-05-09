@@ -1445,6 +1445,17 @@ alpm_list_t *alpm_db_get_groupcache(alpm_db_t *db);
 int alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 		alpm_list_t **ret);
 
+/** Searches a database with regular expressions.
+ * @param db pointer to the package database to search in
+ * @param needles a list of regular expressions to search for
+ * @param xdata a list of regular expressions to search in extended data field
+ * @param ret pointer to list for storing packages matching all
+ * regular expressions - must point to an empty (NULL) alpm_list_t *.
+ * @return 0 on success, -1 on error (pm_errno is set accordingly)
+ */
+int alpm_db_search_xdata(alpm_db_t *db, const alpm_list_t *needles,
+		const alpm_list_t *xdata, alpm_list_t **ret);
+
 /** The usage level of a database. */
 typedef enum _alpm_db_usage_t {
        /** Enable refreshes for this database */

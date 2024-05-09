@@ -147,6 +147,9 @@ static void usage(int op, const char * const myname)
 			addlist(_("  -p, --file <package> query a package file instead of the database\n"));
 			addlist(_("  -q, --quiet          show less information for query and search\n"));
 			addlist(_("  -s, --search <regex> search locally-installed packages for matching strings\n"));
+			addlist(_("      --xdata-search <regex>\n"
+					  "                       search locally-installed packages for matching strings\n"
+					  "                       inside extended data field\n"));
 			addlist(_("  -t, --unrequired     list packages not (optionally) required by any\n"
 			          "                       package (-tt to ignore optdepends) [filter]\n"));
 			addlist(_("  -u, --upgrades       list outdated packages [filter]\n"));
@@ -594,6 +597,10 @@ static int parsearg_query(int opt)
 		case 's':
 			config->op_q_search = 1;
 			break;
+		case OP_XDATA:
+			config->op_q_search = 1;
+			parsearg_util_addlist(&(config->xdata));
+			break;
 		case OP_UNREQUIRED:
 		case 't':
 			(config->op_q_unrequired)++;
@@ -976,6 +983,7 @@ static int parseargs(int argc, char *argv[])
 		{"needed",     no_argument,       0, OP_NEEDED},
 		{"asexplicit",     no_argument,   0, OP_ASEXPLICIT},
 		{"xdata",     required_argument,   0, OP_XDATA},
+		{"xdata-search", required_argument,   0, OP_XDATA},
 		{"arch",       required_argument, 0, OP_ARCH},
 		{"print-format", required_argument, 0, OP_PRINTFORMAT},
 		{"gpgdir",     required_argument, 0, OP_GPGDIR},
