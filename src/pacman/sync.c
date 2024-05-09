@@ -761,7 +761,7 @@ static void print_broken_dep(alpm_depmissing_t *miss)
 
 int sync_prepare_execute(void)
 {
-	alpm_list_t *i, *packages, *data = NULL;
+	alpm_list_t *i, *packages, *data = NULL, *xdata_lst = NULL;
 	int retval = 0;
 
 	/* Step 2: "compute" the transaction based on targets and flags */
@@ -823,7 +823,6 @@ int sync_prepare_execute(void)
 	}
 
 	/* Step 2.1: set extended data fields */
-	alpm_list_t *xdata_lst = NULL;
 	for(i = config->xdata; i; i = alpm_list_next(i)) {
 		const char *xdata_arg = i->data;
 		alpm_pkg_xdata_t *xdata = alpm_pkg_parse_xdata(xdata_arg);
@@ -834,16 +833,38 @@ int sync_prepare_execute(void)
 		}
 		alpm_list_append(&xdata_lst, xdata);
 	}
+
+	alpm_db_t *localdb = alpm_get_localdb(config->handle);
 	for(alpm_list_t *j = packages; j; j = alpm_list_next(j)) {
 		alpm_pkg_t *pkg = j->data;
-		if(alpm_pkg_xdata_update(pkg, xdata_lst) != 0) {
-			alpm_errno_t err = alpm_errno(config->handle);
-			pm_printf(ALPM_LOG_ERROR, _("failed to update extended data fields (%s)\n"),
-					alpm_strerror(err));
+		const char *pkg_name = alpm_pkg_get_name(pkg);
+		alpm_pkg_t *localpkg = alpm_db_get_pkg(localdb, pkg_name);
+		if(localpkg == NULL) {
+			if(alpm_errno(config->handle) != ALPM_ERR_PKG_NOT_FOUND) {
+				alpm_errno_t err = alpm_errno(config->handle);
+				pm_printf(ALPM_LOG_ERROR, _("failed to get localdb package %s (%s)\n"), pkg_name,
+						alpm_strerror(err));
+				retval = 1;
+				goto cleanup;
+			}
+		}
+		/* order of precedence:
+		 * 1) prebuilt xdata from package
+		 * 2) existing xdata
+		 * 3) CLI params
+		 * */
+		int update_retval = 0;
+		if(localpkg)
+			update_retval |= alpm_pkg_xdata_update(pkg, alpm_pkg_get_xdata(localpkg));
+		update_retval |= alpm_pkg_xdata_update(pkg, xdata_lst);
+
+		if(update_retval != 0) {
+			pm_printf(ALPM_LOG_ERROR, _("failed to update extended data fields for package %s\n"),
+						pkg_name);
+			retval = 1;
+			goto cleanup;
 		}
 	}
-	alpm_list_free_inner(xdata_lst, (alpm_list_fn_free)alpm_pkg_xdata_free);
-	alpm_list_free(xdata_lst);
 
 	/* Step 3: actually perform the operation */
 	if(config->print) {
@@ -912,6 +933,9 @@ int sync_prepare_execute(void)
 
 	/* Step 4: release transaction resources */
 cleanup:
+	alpm_list_free_inner(xdata_lst, (alpm_list_fn_free)alpm_pkg_xdata_free);
+	alpm_list_free(xdata_lst);
+
 	alpm_list_free(data);
 	if(trans_release() == -1) {
 		retval = 1;
