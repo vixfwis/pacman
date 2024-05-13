@@ -53,7 +53,7 @@ alpm_pkg_xdata_t SYMEXPORT *alpm_pkg_parse_xdata(const char *string) {
   return _alpm_pkg_parse_xdata(string);
 }
 
-int SYMEXPORT alpm_pkg_xdata_update(alpm_pkg_t *pkg, alpm_list_t *xdata_lst) {
+int SYMEXPORT alpm_pkg_xdata_update(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst) {
 	ASSERT(pkg != NULL, return -1);
 	pkg->handle->pm_errno = ALPM_ERR_OK;
 	if(xdata_lst == NULL) {
@@ -61,7 +61,7 @@ int SYMEXPORT alpm_pkg_xdata_update(alpm_pkg_t *pkg, alpm_list_t *xdata_lst) {
 	}
 
 	alpm_list_t *pkg_xdata_lst = alpm_pkg_get_xdata(pkg);
-	for(alpm_list_t *i = xdata_lst; i; i = alpm_list_next(i)) {
+	for(const alpm_list_t *i = xdata_lst; i; i = alpm_list_next(i)) {
 		alpm_pkg_xdata_t *xdata = i->data;
 		int found_existing_key = 0;
 		for(alpm_list_t *j = pkg_xdata_lst; j; j = alpm_list_next(j)) {

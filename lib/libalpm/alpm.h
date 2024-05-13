@@ -2675,7 +2675,7 @@ alpm_list_t *alpm_pkg_get_xdata(alpm_pkg_t *pkg);
  * @param xdata_lst a reference to a list of alpm_pkg_xdata_t objects
  * @return 0 on success, -1 on error (pm_errno is set accordingly)
  */
-int alpm_pkg_xdata_update(alpm_pkg_t *pkg, alpm_list_t *xdata_lst);
+int alpm_pkg_xdata_update(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst);
 
 /** Parse string into an extended data structure
  * @param string a pointer to string

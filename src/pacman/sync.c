@@ -761,8 +761,73 @@ static void print_broken_dep(alpm_depmissing_t *miss)
 
 int sync_prepare_execute(void)
 {
-	alpm_list_t *i, *packages, *data = NULL, *xdata_lst = NULL;
+	alpm_list_t *i, *j, *packages, *data = NULL, *xdata_lst = NULL;
 	int retval = 0;
+
+	/* Step 1.1: set extended data fields */
+	const char *xdata_userprefix = "user:";
+	for(i = config->xdata; i; i = alpm_list_next(i)) {
+		const char *xdata_arg = i->data;
+		alpm_pkg_xdata_t *xdata = alpm_pkg_parse_xdata(xdata_arg);
+		if(xdata == NULL) {
+			pm_printf(ALPM_LOG_ERROR, _("failed to parse extended data field: %s\n"), xdata_arg);
+			retval = 1;
+			goto cleanup;
+		}
+		char *xdata_newkey = calloc(1, strlen(xdata->name) + strlen(xdata_userprefix) + 1);
+		if(xdata_newkey == NULL) {
+			pm_printf(ALPM_LOG_ERROR, _("memory allocation error\n"));
+			retval = 1;
+			goto cleanup;
+		}
+		sprintf(xdata_newkey, "%s%s", xdata_userprefix, xdata->name);
+		free(xdata->name);
+		xdata->name = xdata_newkey;
+
+		alpm_list_append(&xdata_lst, xdata);
+	}
+
+	if(xdata_lst != NULL) {
+		alpm_db_t *localdb = alpm_get_localdb(config->handle);
+		packages = alpm_trans_get_add(config->handle);
+		for(i = packages; i; i = alpm_list_next(i)) {
+			alpm_pkg_t *pkg = i->data;
+			const char *pkg_name = alpm_pkg_get_name(pkg);
+			alpm_pkg_t *localpkg = alpm_db_get_pkg(localdb, pkg_name);
+			if(localpkg == NULL) {
+				if(alpm_errno(config->handle) != ALPM_ERR_PKG_NOT_FOUND) {
+					alpm_errno_t err = alpm_errno(config->handle);
+					pm_printf(ALPM_LOG_ERROR, _("failed to get localdb package %s (%s)\n"), pkg_name,
+							alpm_strerror(err));
+					retval = 1;
+					goto cleanup;
+				}
+			}
+			/* order of precedence:
+			 * 1) existing user xdata
+			 * 2) CLI params
+			 * */
+			alpm_list_t *localpkg_xdata_user_lst = NULL;
+			for(j = alpm_pkg_get_xdata(localpkg); j; j = alpm_list_next(j)) {
+				alpm_pkg_xdata_t *localpkg_xdata = j->data;
+				if(strncmp(localpkg_xdata->name, xdata_userprefix, strlen(xdata_userprefix)) == 0) {
+					/* shallow copy, xdata_update right after will create a full one */
+					alpm_list_append(&localpkg_xdata_user_lst, localpkg_xdata);
+				}
+			}
+			int update_retval = 0;
+			update_retval |= alpm_pkg_xdata_update(pkg, localpkg_xdata_user_lst);
+			update_retval |= alpm_pkg_xdata_update(pkg, xdata_lst);
+			alpm_list_free(localpkg_xdata_user_lst);
+
+			if(update_retval != 0) {
+				pm_printf(ALPM_LOG_ERROR, _("failed to update extended data fields for package %s\n"),
+							pkg_name);
+				retval = 1;
+				goto cleanup;
+			}
+		}
+	}
 
 	/* Step 2: "compute" the transaction based on targets and flags */
 	if(alpm_trans_prepare(config->handle, &data) == -1) {
@@ -820,50 +885,6 @@ int sync_prepare_execute(void)
 			printf(_(" there is nothing to do\n"));
 		}
 		goto cleanup;
-	}
-
-	/* Step 2.1: set extended data fields */
-	for(i = config->xdata; i; i = alpm_list_next(i)) {
-		const char *xdata_arg = i->data;
-		alpm_pkg_xdata_t *xdata = alpm_pkg_parse_xdata(xdata_arg);
-		if(xdata == NULL) {
-			pm_printf(ALPM_LOG_ERROR, _("failed to parse extended data field: %s\n"), xdata_arg);
-			retval = 1;
-			goto cleanup;
-		}
-		alpm_list_append(&xdata_lst, xdata);
-	}
-
-	alpm_db_t *localdb = alpm_get_localdb(config->handle);
-	for(alpm_list_t *j = packages; j; j = alpm_list_next(j)) {
-		alpm_pkg_t *pkg = j->data;
-		const char *pkg_name = alpm_pkg_get_name(pkg);
-		alpm_pkg_t *localpkg = alpm_db_get_pkg(localdb, pkg_name);
-		if(localpkg == NULL) {
-			if(alpm_errno(config->handle) != ALPM_ERR_PKG_NOT_FOUND) {
-				alpm_errno_t err = alpm_errno(config->handle);
-				pm_printf(ALPM_LOG_ERROR, _("failed to get localdb package %s (%s)\n"), pkg_name,
-						alpm_strerror(err));
-				retval = 1;
-				goto cleanup;
-			}
-		}
-		/* order of precedence:
-		 * 1) prebuilt xdata from package
-		 * 2) existing xdata
-		 * 3) CLI params
-		 * */
-		int update_retval = 0;
-		if(localpkg)
-			update_retval |= alpm_pkg_xdata_update(pkg, alpm_pkg_get_xdata(localpkg));
-		update_retval |= alpm_pkg_xdata_update(pkg, xdata_lst);
-
-		if(update_retval != 0) {
-			pm_printf(ALPM_LOG_ERROR, _("failed to update extended data fields for package %s\n"),
-						pkg_name);
-			retval = 1;
-			goto cleanup;
-		}
 	}
 
 	/* Step 3: actually perform the operation */
