@@ -22,6 +22,9 @@
 
 #include <alpm.h>
 
+extern const char *XDATA_USER_PREFIX;
+extern const char *XDATA_USER_NOTE_DEFAULT_KEY;
+
 void dump_pkg_full(alpm_pkg_t *pkg, int extra);
 
 void dump_pkg_backups(alpm_pkg_t *pkg, unsigned short cols);

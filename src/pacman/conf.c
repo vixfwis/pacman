@@ -35,6 +35,8 @@
 
 /* pacman */
 #include "conf.h"
+#include "alpm.h"
+#include "alpm_list.h"
 #include "ini.h"
 #include "util.h"
 #include "callback.h"
@@ -150,6 +152,9 @@ int config_free(config_t *oldconfig)
 	FREELIST(oldconfig->noupgrade);
 	FREELIST(oldconfig->noextract);
 	FREELIST(oldconfig->overwrite_files);
+	FREELIST(oldconfig->user_note);
+	FREELIST(oldconfig->user_note_extra);
+	FREELIST(oldconfig->user_note_delete);
 	free(oldconfig->configfile);
 	free(oldconfig->sysroot);
 	free(oldconfig->rootdir);

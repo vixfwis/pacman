@@ -2709,6 +2709,15 @@ off_t alpm_pkg_download_size(alpm_pkg_t *newpkg);
  */
 int alpm_pkg_set_reason(alpm_pkg_t *pkg, alpm_pkgreason_t reason);
 
+/** Set extended data field for a package in the local database.
+ * The provided package object must be from the local database or this method
+ * will fail. The write to the local database is performed immediately.
+ * @param pkg the package to update
+ * @param xdata_lst list of \link alpm_pkg_xdata_t \endlink structures
+ * @return 0 on success, -1 on error (pm_errno is set accordingly)
+ */
+int alpm_pkg_set_xdata(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst);
+
 
 /* End of libalpm_pkg_t accessors */
 /** @} */

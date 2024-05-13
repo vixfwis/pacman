@@ -461,9 +461,6 @@ int _alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 	/* copy the pkgcache- we will free the list var after each needle */
 	alpm_list_t *list = alpm_list_copy(_alpm_db_get_pkgcache(db));
 
-	/*TODO: there's a lot of overlap with default search code.
-	 * maybe move it all to separate static func? */
-
 	/* search in extended data field */
 	for(i = xdata; i; i = i->next) {
 		char *targ;
@@ -474,7 +471,8 @@ int _alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 		}
 		*ret = NULL;
 		targ = i->data;
-		_alpm_log(db->handle, ALPM_LOG_DEBUG, "searching for '%s' in extended data field\n", targ);
+		_alpm_log(db->handle, ALPM_LOG_DEBUG,
+				"searching for '%s' in extended data field\n", targ);
 
 		if(regcomp(&reg, targ, REG_EXTENDED | REG_NOSUB | REG_ICASE | REG_NEWLINE) != 0) {
 			db->handle->pm_errno = ALPM_ERR_INVALID_REGEX;
@@ -503,6 +501,7 @@ int _alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 							targ, pkg->name);
 					*ret = alpm_list_add(*ret, pkg);
 				}
+				free(xdata_str);
 			}
 		}
 

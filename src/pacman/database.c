@@ -91,6 +91,79 @@ static int change_install_reason(alpm_list_t *targets)
 	return ret;
 }
 
+/**
+ * @brief Modify the 'local' package database.
+ *
+ * @param targets a list of packages (as strings) to modify
+ * @param add list of alpm_pkg_xdata_t to add
+ * @param remove list of char* keys to remove
+ *
+ * @return 0 on success, 1 on failure
+ */
+static int change_user_notes(alpm_list_t *targets, alpm_list_t *add, alpm_list_t *delete) {
+	alpm_list_t *i, *j, *k;
+	alpm_db_t *db_local;
+	int ret = 0;
+
+	if(targets == NULL) {
+		pm_printf(ALPM_LOG_ERROR, _("no targets specified (use -h for help)\n"));
+		return 1;
+	}
+
+	if(add == NULL && delete == NULL) {
+		pm_printf(ALPM_LOG_ERROR, _("no notes specified (use -h for help)\n"));
+		return 1;
+	}
+
+	/* Lock database */
+	if(trans_init(0, 0) == -1) {
+		return 1;
+	}
+
+	db_local = alpm_get_localdb(config->handle);
+	for(i = targets; i; i = alpm_list_next(i)) {
+		char *pkgname = i->data;
+		alpm_pkg_t *pkg = alpm_db_get_pkg(db_local, pkgname);
+		if(pkg == NULL) {
+			pm_printf(ALPM_LOG_ERROR, _("could not get local package %s (%s)\n"),
+							pkgname, alpm_strerror(alpm_errno(config->handle)));
+			ret = 1;
+			continue;
+		}else if(alpm_pkg_xdata_update(pkg, add) != 0) {
+			pm_printf(ALPM_LOG_ERROR, _("could not update extended data for %s (%s)\n"),
+							pkgname, alpm_strerror(alpm_errno(config->handle)));
+			ret = 1;
+			continue;
+		}
+		alpm_list_t *xdata = alpm_pkg_get_xdata(pkg);
+		for(j = xdata; j;) {
+			alpm_list_t *item_to_delete = NULL;
+			alpm_pkg_xdata_t *pd = j->data;
+			for(k = delete; k; k = alpm_list_next(k)) {
+				const char *delete_key = k->data;
+				if(strcmp(pd->name, delete_key) == 0) {
+					item_to_delete = j;
+				}
+			}
+			j = alpm_list_next(j);
+			if(item_to_delete) {
+				alpm_list_remove_item(xdata, item_to_delete);
+			}
+		}
+		if(alpm_pkg_set_xdata(pkg, xdata) != 0) {
+			pm_printf(ALPM_LOG_ERROR, _("could not set extended data for package %s (%s)\n"),
+							pkgname, alpm_strerror(alpm_errno(config->handle)));
+			ret = 1;
+		}
+	}
+
+	/* Unlock database */
+	if(trans_release() == -1) {
+		return 1;
+	}
+	return ret;
+}
+
 static int check_db_missing_deps(alpm_list_t *pkglist)
 {
 	alpm_list_t *data, *i;
@@ -299,6 +372,11 @@ int pacman_database(alpm_list_t *targets)
 
 	if(config->flags & (ALPM_TRANS_FLAG_ALLDEPS | ALPM_TRANS_FLAG_ALLEXPLICIT)) {
 		ret = change_install_reason(targets);
+	}
+
+	alpm_list_t *i, *usernote_add = NULL, *usernote_delete = NULL;
+	for(i = config->user_note; i; i = alpm_list_next(i)) {
+
 	}
 
 	return ret;

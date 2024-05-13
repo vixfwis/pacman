@@ -37,6 +37,11 @@
 
 #define CLBUF_SIZE 4096
 
+/* Defaults for user-added notes inside extended data field
+ */
+const char *XDATA_USER_PREFIX = "user:";
+const char *XDATA_USER_NOTE_DEFAULT_KEY = "note";
+
 /* The term "title" refers to the first field of each line in the package
  * information displayed by pacman. Titles are stored in the `titles` array and
  * referenced by the following indices.
@@ -351,18 +356,27 @@ void dump_pkg_full(alpm_pkg_t *pkg, int extra)
 		dump_pkg_backups(pkg, cols);
 	}
 
-	if(extra) {
-		alpm_list_t *text = NULL, *pdata = alpm_pkg_get_xdata(pkg);
-		while(pdata) {
-			alpm_pkg_xdata_t *pd = pdata->data;
-			char *formatted = NULL;
-			pm_asprintf(&formatted, "%s=%s", pd->name, pd->value);
-			text = alpm_list_add(text, formatted);
-			pdata = pdata->next;
+	alpm_list_t *text = NULL, *user_xdata = NULL, *pdata = alpm_pkg_get_xdata(pkg);
+	while(pdata) {
+		alpm_pkg_xdata_t *pd = pdata->data;
+		char *formatted = NULL;
+		pm_asprintf(&formatted, "%s=%s", pd->name, pd->value);
+		text = alpm_list_add(text, formatted);
+		if(strncmp(formatted, XDATA_USER_PREFIX, strlen(XDATA_USER_PREFIX)) == 0) {
+			/* shallow copy - inner data will be freed by FREELIST(text).
+			 * skipping the prefix for user data print-out,
+			 * if user wants to see full xdata, there's -ii
+			 */
+			user_xdata = alpm_list_add(user_xdata, formatted + strlen(XDATA_USER_PREFIX));
 		}
-		list_display_linebreak("Extended Data   :", text, cols);
-		FREELIST(text);
+		pdata = pdata->next;
 	}
+	list_display_linebreak("User Data       :", user_xdata, cols);
+	alpm_list_free(user_xdata);
+	if(extra) {
+		list_display_linebreak("Extended Data   :", text, cols);
+	}
+	FREELIST(text);
 
 	/* final newline to separate packages */
 	printf("\n");
@@ -539,7 +553,7 @@ int dump_pkg_search(alpm_db_t *db, alpm_list_t *targets, int show_status)
 {
 	int freelist = 0;
 	alpm_db_t *db_local;
-	alpm_list_t *i, *searchlist = NULL;
+	alpm_list_t *i, *j, *searchlist = NULL;
 	unsigned short cols;
 	const colstr_t *colstr = &config->colstr;
 
@@ -548,9 +562,9 @@ int dump_pkg_search(alpm_db_t *db, alpm_list_t *targets, int show_status)
 	}
 
 	/* if we have a targets list, search for packages matching it */
-	if(targets || config->xdata) {
-		if(config->xdata) {
-			if(alpm_db_search_xdata(db, targets, config->xdata, &searchlist) != 0) {
+	if(targets || config->user_note) {
+		if(config->user_note) {
+			if(alpm_db_search_xdata(db, targets, config->user_note, &searchlist) != 0) {
 				return -1;
 			}
 		}else {
@@ -586,6 +600,19 @@ int dump_pkg_search(alpm_db_t *db, alpm_list_t *targets, int show_status)
 			/* we need a newline and initial indent first */
 			fputs("\n    ", stdout);
 			indentprint(alpm_pkg_get_desc(pkg), 4, cols);
+			/* if we're searching for user note, print it */
+			if(config->user_note) {
+				for(j = alpm_pkg_get_xdata(pkg); j; j = alpm_list_next(j)) {
+					alpm_pkg_xdata_t *xdata = j->data;
+					if(strncmp(xdata->name, XDATA_USER_PREFIX, strlen(XDATA_USER_PREFIX)) == 0) {
+						char *user_note = calloc(1, strlen(xdata->name) + strlen(xdata->value) + 1);
+						fputs("\n    ", stdout);
+						sprintf(user_note, "%s=%s", xdata->name + strlen(XDATA_USER_PREFIX), xdata->value);
+						indentprint(user_note, 4, cols);
+						free(user_note);
+					}
+				}
+			}
 		}
 		fputc('\n', stdout);
 	}

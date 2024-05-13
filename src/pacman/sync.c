@@ -764,9 +764,30 @@ int sync_prepare_execute(void)
 	alpm_list_t *i, *j, *packages, *data = NULL, *xdata_lst = NULL;
 	int retval = 0;
 
-	/* Step 1.1: set extended data fields */
-	const char *xdata_userprefix = "user:";
-	for(i = config->xdata; i; i = alpm_list_next(i)) {
+	/* Step 1.1: set user-added extended data fields */
+	for(i = config->user_note; i; i = alpm_list_next(i)) {
+		const char *xdata_arg = i->data;
+		/* extra 1 byte for '=' */
+		char *xdata_full_arg = calloc(1,
+				strlen(xdata_arg) + strlen(XDATA_USER_PREFIX) + strlen(XDATA_USER_NOTE_DEFAULT_KEY) + 2
+		);
+		if(xdata_full_arg == NULL) {
+			pm_printf(ALPM_LOG_ERROR, _("memory allocation error\n"));
+			retval = 1;
+			goto cleanup;
+		}
+		sprintf(xdata_full_arg, "%s%s", XDATA_USER_PREFIX, xdata_arg);
+		alpm_pkg_xdata_t *xdata = alpm_pkg_parse_xdata(xdata_full_arg);
+		if(xdata == NULL) {
+			pm_printf(ALPM_LOG_ERROR, _("failed to parse extended data field: %s\n"), xdata_arg);
+			retval = 1;
+			goto cleanup;
+		}
+		free(xdata_full_arg);
+		alpm_list_append(&xdata_lst, xdata);
+	}
+
+	for(i = config->user_note_extra; i; i = alpm_list_next(i)) {
 		const char *xdata_arg = i->data;
 		alpm_pkg_xdata_t *xdata = alpm_pkg_parse_xdata(xdata_arg);
 		if(xdata == NULL) {
@@ -774,16 +795,6 @@ int sync_prepare_execute(void)
 			retval = 1;
 			goto cleanup;
 		}
-		char *xdata_newkey = calloc(1, strlen(xdata->name) + strlen(xdata_userprefix) + 1);
-		if(xdata_newkey == NULL) {
-			pm_printf(ALPM_LOG_ERROR, _("memory allocation error\n"));
-			retval = 1;
-			goto cleanup;
-		}
-		sprintf(xdata_newkey, "%s%s", xdata_userprefix, xdata->name);
-		free(xdata->name);
-		xdata->name = xdata_newkey;
-
 		alpm_list_append(&xdata_lst, xdata);
 	}
 
@@ -810,7 +821,7 @@ int sync_prepare_execute(void)
 			alpm_list_t *localpkg_xdata_user_lst = NULL;
 			for(j = alpm_pkg_get_xdata(localpkg); j; j = alpm_list_next(j)) {
 				alpm_pkg_xdata_t *localpkg_xdata = j->data;
-				if(strncmp(localpkg_xdata->name, xdata_userprefix, strlen(xdata_userprefix)) == 0) {
+				if(strncmp(localpkg_xdata->name, XDATA_USER_PREFIX, strlen(XDATA_USER_PREFIX)) == 0) {
 					/* shallow copy, xdata_update right after will create a full one */
 					alpm_list_append(&localpkg_xdata_user_lst, localpkg_xdata);
 				}

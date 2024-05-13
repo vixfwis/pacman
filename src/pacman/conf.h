@@ -126,7 +126,9 @@ typedef struct __config_t {
 	alpm_list_t *noupgrade;
 	alpm_list_t *noextract;
 	alpm_list_t *overwrite_files;
-	alpm_list_t *xdata;
+	alpm_list_t *user_note;
+	alpm_list_t *user_note_extra;
+	alpm_list_t *user_note_delete;
 	char *xfercommand;
 	char **xfercommand_argv;
 	size_t xfercommand_argc;
@@ -214,7 +216,9 @@ enum {
 	OP_REFRESH,
 	OP_ASSUMEINSTALLED,
 	OP_DISABLEDLTIMEOUT,
-	OP_XDATA
+	OP_USERNOTE,
+	OP_USERNOTE_EXTRA,
+	OP_USERNOTE_DELETE
 };
 
 /* clean method */

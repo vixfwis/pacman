@@ -1205,6 +1205,33 @@ int SYMEXPORT alpm_pkg_set_reason(alpm_pkg_t *pkg, alpm_pkgreason_t reason)
 	return 0;
 }
 
+int SYMEXPORT alpm_pkg_set_xdata(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst)
+{
+	ASSERT(pkg != NULL, return -1);
+	ASSERT(pkg->origin == ALPM_PKG_FROM_LOCALDB,
+			RET_ERR(pkg->handle, ALPM_ERR_WRONG_ARGS, -1));
+	ASSERT(pkg->origin_data.db == pkg->handle->db_local,
+			RET_ERR(pkg->handle, ALPM_ERR_WRONG_ARGS, -1));
+	pkg->handle->pm_errno = ALPM_ERR_OK;
+
+	alpm_list_t *tmp = pkg->xdata;
+	pkg->xdata = NULL;
+	if(alpm_pkg_xdata_update(pkg, xdata_lst) != 0) {
+		return -1;
+	}
+	if(tmp != NULL) {
+		alpm_list_free_inner(tmp, (alpm_list_fn_free)alpm_pkg_xdata_free);
+		alpm_list_free(tmp);
+	}
+
+	/* write DESC */
+	if(_alpm_local_db_write(pkg->handle->db_local, pkg, INFRQ_DESC)) {
+		RET_ERR(pkg->handle, ALPM_ERR_DB_WRITE, -1);
+	}
+
+	return 0;
+}
+
 static const struct db_operations local_db_ops = {
 	.validate         = local_db_validate,
 	.populate         = local_db_populate,
