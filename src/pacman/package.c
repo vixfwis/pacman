@@ -37,11 +37,6 @@
 
 #define CLBUF_SIZE 4096
 
-/* Defaults for user-added notes inside extended data field
- */
-const char *XDATA_USER_PREFIX = "user:";
-const char *XDATA_USER_NOTE_DEFAULT_KEY = "note";
-
 /* The term "title" refers to the first field of each line in the package
  * information displayed by pacman. Titles are stored in the `titles` array and
  * referenced by the following indices.
@@ -86,6 +81,12 @@ enum {
 #define TITLE_MAXLEN 50
 
 static char titles[_T_MAX][TITLE_MAXLEN * sizeof(wchar_t)];
+
+static const char *XDATA_DEFAULT_USER_KEY = "note";
+
+const char *get_default_user_note_key(void) {
+	return XDATA_DEFAULT_USER_KEY;
+}
 
 /** Build the `titles` array of localized titles and pad them with spaces so
  * that they align with the longest title. Storage for strings is stack
@@ -356,27 +357,33 @@ void dump_pkg_full(alpm_pkg_t *pkg, int extra)
 		dump_pkg_backups(pkg, cols);
 	}
 
-	alpm_list_t *text = NULL, *user_xdata = NULL, *pdata = alpm_pkg_get_xdata(pkg);
-	while(pdata) {
-		alpm_pkg_xdata_t *pd = pdata->data;
-		char *formatted = NULL;
-		pm_asprintf(&formatted, "%s=%s", pd->name, pd->value);
-		text = alpm_list_add(text, formatted);
-		if(strncmp(formatted, XDATA_USER_PREFIX, strlen(XDATA_USER_PREFIX)) == 0) {
-			/* shallow copy - inner data will be freed by FREELIST(text).
-			 * skipping the prefix for user data print-out,
-			 * if user wants to see full xdata, there's -ii
-			 */
-			user_xdata = alpm_list_add(user_xdata, formatted + strlen(XDATA_USER_PREFIX));
+	alpm_list_t *user_notes = alpm_pkg_get_user_notes(pkg);
+	if(user_notes) {
+		alpm_list_t *text = NULL;
+		for(alpm_list_t *i = user_notes; i; i = alpm_list_next(i)) {
+			alpm_pkg_xdata_t *note = i->data;
+			char *formatted = NULL;
+			pm_asprintf(&formatted, "%s=%s", note->name, note->value);
+			text = alpm_list_add(text, formatted);
 		}
-		pdata = pdata->next;
+		list_display_linebreak("User Notes      :", text, cols);
+		FREELIST(text);
 	}
-	list_display_linebreak("User Data       :", user_xdata, cols);
-	alpm_list_free(user_xdata);
+	alpm_list_free_inner(user_notes, (alpm_list_fn_free)alpm_pkg_xdata_free);
+	alpm_list_free(user_notes);
+
 	if(extra) {
+		alpm_list_t *text = NULL, *pdata = alpm_pkg_get_xdata(pkg);
+		while(pdata) {
+			alpm_pkg_xdata_t *pd = pdata->data;
+			char *formatted = NULL;
+			pm_asprintf(&formatted, "%s=%s", pd->name, pd->value);
+			text = alpm_list_add(text, formatted);
+			pdata = pdata->next;
+		}
 		list_display_linebreak("Extended Data   :", text, cols);
+		FREELIST(text);
 	}
-	FREELIST(text);
 
 	/* final newline to separate packages */
 	printf("\n");
@@ -564,7 +571,7 @@ int dump_pkg_search(alpm_db_t *db, alpm_list_t *targets, int show_status)
 	/* if we have a targets list, search for packages matching it */
 	if(targets || config->user_note) {
 		if(config->user_note) {
-			if(alpm_db_search_xdata(db, targets, config->user_note, &searchlist) != 0) {
+			if(alpm_db_search_usernote(db, targets, config->user_note, &searchlist) != 0) {
 				return -1;
 			}
 		}else {
@@ -600,18 +607,19 @@ int dump_pkg_search(alpm_db_t *db, alpm_list_t *targets, int show_status)
 			/* we need a newline and initial indent first */
 			fputs("\n    ", stdout);
 			indentprint(alpm_pkg_get_desc(pkg), 4, cols);
-			/* if we're searching for user note, print it */
+			/* if we're searching for user note, print package notes */
 			if(config->user_note) {
-				for(j = alpm_pkg_get_xdata(pkg); j; j = alpm_list_next(j)) {
+				alpm_list_t *pkg_notes = alpm_pkg_get_user_notes(pkg);
+				for(j = pkg_notes; j; j = alpm_list_next(j)) {
 					alpm_pkg_xdata_t *xdata = j->data;
-					if(strncmp(xdata->name, XDATA_USER_PREFIX, strlen(XDATA_USER_PREFIX)) == 0) {
-						char *user_note = calloc(1, strlen(xdata->name) + strlen(xdata->value) + 1);
-						fputs("\n    ", stdout);
-						sprintf(user_note, "%s=%s", xdata->name + strlen(XDATA_USER_PREFIX), xdata->value);
-						indentprint(user_note, 4, cols);
-						free(user_note);
-					}
+					char *user_note = calloc(1, strlen(xdata->name) + strlen(xdata->value) + 1);
+					fputs("\n    ", stdout);
+					sprintf(user_note, "%s=%s", xdata->name, xdata->value);
+					indentprint(user_note, 4, cols);
+					free(user_note);
 				}
+				alpm_list_free_inner(pkg_notes, (alpm_list_fn_free)alpm_pkg_xdata_free);
+				alpm_list_free(pkg_notes);
 			}
 		}
 		fputc('\n', stdout);

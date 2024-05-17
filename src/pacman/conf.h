@@ -85,6 +85,7 @@ typedef struct __config_t {
 	unsigned short op_q_upgrade;
 	unsigned short op_q_check;
 	unsigned short op_q_locality;
+	unsigned short op_q_usernote_delete;
 
 	unsigned short op_s_clean;
 	unsigned short op_s_downloadonly;

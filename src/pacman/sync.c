@@ -761,30 +761,32 @@ static void print_broken_dep(alpm_depmissing_t *miss)
 
 int sync_prepare_execute(void)
 {
-	alpm_list_t *i, *j, *packages, *data = NULL, *xdata_lst = NULL;
+	alpm_list_t *i, *packages, *data = NULL, *notes_lst = NULL;
 	int retval = 0;
+	const char *default_key = get_default_user_note_key();
 
 	/* Step 1.1: set user-added extended data fields */
 	for(i = config->user_note; i; i = alpm_list_next(i)) {
 		const char *xdata_arg = i->data;
 		/* extra 1 byte for '=' */
 		char *xdata_full_arg = calloc(1,
-				strlen(xdata_arg) + strlen(XDATA_USER_PREFIX) + strlen(XDATA_USER_NOTE_DEFAULT_KEY) + 2
+				strlen(xdata_arg) + strlen(default_key) + 2
 		);
 		if(xdata_full_arg == NULL) {
 			pm_printf(ALPM_LOG_ERROR, _("memory allocation error\n"));
 			retval = 1;
 			goto cleanup;
 		}
-		sprintf(xdata_full_arg, "%s%s", XDATA_USER_PREFIX, xdata_arg);
+		sprintf(xdata_full_arg, "%s=%s", default_key, xdata_arg);
 		alpm_pkg_xdata_t *xdata = alpm_pkg_parse_xdata(xdata_full_arg);
 		if(xdata == NULL) {
 			pm_printf(ALPM_LOG_ERROR, _("failed to parse extended data field: %s\n"), xdata_arg);
+			free(xdata_full_arg);
 			retval = 1;
 			goto cleanup;
 		}
 		free(xdata_full_arg);
-		alpm_list_append(&xdata_lst, xdata);
+		alpm_list_append(&notes_lst, xdata);
 	}
 
 	for(i = config->user_note_extra; i; i = alpm_list_next(i)) {
@@ -795,45 +797,16 @@ int sync_prepare_execute(void)
 			retval = 1;
 			goto cleanup;
 		}
-		alpm_list_append(&xdata_lst, xdata);
+		alpm_list_append(&notes_lst, xdata);
 	}
 
-	if(xdata_lst != NULL) {
-		alpm_db_t *localdb = alpm_get_localdb(config->handle);
+	if(notes_lst != NULL) {
 		packages = alpm_trans_get_add(config->handle);
 		for(i = packages; i; i = alpm_list_next(i)) {
 			alpm_pkg_t *pkg = i->data;
-			const char *pkg_name = alpm_pkg_get_name(pkg);
-			alpm_pkg_t *localpkg = alpm_db_get_pkg(localdb, pkg_name);
-			if(localpkg == NULL) {
-				if(alpm_errno(config->handle) != ALPM_ERR_PKG_NOT_FOUND) {
-					alpm_errno_t err = alpm_errno(config->handle);
-					pm_printf(ALPM_LOG_ERROR, _("failed to get localdb package %s (%s)\n"), pkg_name,
-							alpm_strerror(err));
-					retval = 1;
-					goto cleanup;
-				}
-			}
-			/* order of precedence:
-			 * 1) existing user xdata
-			 * 2) CLI params
-			 * */
-			alpm_list_t *localpkg_xdata_user_lst = NULL;
-			for(j = alpm_pkg_get_xdata(localpkg); j; j = alpm_list_next(j)) {
-				alpm_pkg_xdata_t *localpkg_xdata = j->data;
-				if(strncmp(localpkg_xdata->name, XDATA_USER_PREFIX, strlen(XDATA_USER_PREFIX)) == 0) {
-					/* shallow copy, xdata_update right after will create a full one */
-					alpm_list_append(&localpkg_xdata_user_lst, localpkg_xdata);
-				}
-			}
-			int update_retval = 0;
-			update_retval |= alpm_pkg_xdata_update(pkg, localpkg_xdata_user_lst);
-			update_retval |= alpm_pkg_xdata_update(pkg, xdata_lst);
-			alpm_list_free(localpkg_xdata_user_lst);
-
-			if(update_retval != 0) {
-				pm_printf(ALPM_LOG_ERROR, _("failed to update extended data fields for package %s\n"),
-							pkg_name);
+			if(alpm_pkg_user_notes_update(pkg, notes_lst) != 0) {
+				pm_printf(ALPM_LOG_ERROR, _("failed to update user notes for package %s\n"),
+						alpm_pkg_get_name(pkg));
 				retval = 1;
 				goto cleanup;
 			}
@@ -965,8 +938,8 @@ int sync_prepare_execute(void)
 
 	/* Step 4: release transaction resources */
 cleanup:
-	alpm_list_free_inner(xdata_lst, (alpm_list_fn_free)alpm_pkg_xdata_free);
-	alpm_list_free(xdata_lst);
+	alpm_list_free_inner(notes_lst, (alpm_list_fn_free)alpm_pkg_xdata_free);
+	alpm_list_free(notes_lst);
 
 	alpm_list_free(data);
 	if(trans_release() == -1) {

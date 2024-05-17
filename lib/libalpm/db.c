@@ -353,14 +353,14 @@ int SYMEXPORT alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 	return _alpm_db_search(db, needles, NULL, ret);
 }
 
-int SYMEXPORT alpm_db_search_xdata(alpm_db_t *db, const alpm_list_t *needles,
-		const alpm_list_t *xdata, alpm_list_t **ret)
+int SYMEXPORT alpm_db_search_usernote(alpm_db_t *db, const alpm_list_t *needles,
+		const alpm_list_t *notes, alpm_list_t **ret)
 {
 	ASSERT(db != NULL && ret != NULL && *ret == NULL,
 			RET_ERR(db->handle, ALPM_ERR_WRONG_ARGS, -1));
 	db->handle->pm_errno = ALPM_ERR_OK;
 
-	return _alpm_db_search(db, needles, xdata, ret);
+	return _alpm_db_search(db, needles, notes, ret);
 }
 
 int SYMEXPORT alpm_db_set_usage(alpm_db_t *db, int usage)
@@ -450,7 +450,7 @@ int _alpm_db_cmp(const void *d1, const void *d2)
 }
 
 int _alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
-		const alpm_list_t *xdata, alpm_list_t **ret)
+		const alpm_list_t *notes, alpm_list_t **ret)
 {
 	const alpm_list_t *i, *j, *k;
 
@@ -462,7 +462,7 @@ int _alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 	alpm_list_t *list = alpm_list_copy(_alpm_db_get_pkgcache(db));
 
 	/* search in extended data field */
-	for(i = xdata; i; i = i->next) {
+	for(i = notes; i; i = i->next) {
 		char *targ;
 		regex_t reg;
 
@@ -483,7 +483,8 @@ int _alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 
 		for(j = list; j; j = j->next) {
 			alpm_pkg_t *pkg = j->data;
-			for(k = alpm_pkg_get_xdata(pkg); k; k = k->next) {
+			alpm_list_t *pkg_notes = alpm_pkg_get_user_notes(pkg);
+			for(k = pkg_notes; k; k = k->next) {
 				alpm_pkg_xdata_t *pkg_xdata = k->data;
 				/* pack xdata into flat cstring for searching */
 				char *xdata_str = NULL;
@@ -497,12 +498,14 @@ int _alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 				snprintf(xdata_str, maxlen, "%s=%s", pkg_xdata->name, pkg_xdata->value);
 				if(regexec(&reg, xdata_str, 0, 0, 0) == 0 || strstr(xdata_str, targ)) {
 					_alpm_log(db->handle, ALPM_LOG_DEBUG,
-							"search in xdata for '%s' matched on package '%s'\n",
+							"search in notes for '%s' matched on package '%s'\n",
 							targ, pkg->name);
 					*ret = alpm_list_add(*ret, pkg);
 				}
 				free(xdata_str);
 			}
+			alpm_list_free_inner(pkg_notes, (alpm_list_fn_free)alpm_pkg_xdata_free);
+			alpm_list_free(pkg_notes);
 		}
 
 		/* Free the existing search list, and use the returned list for the

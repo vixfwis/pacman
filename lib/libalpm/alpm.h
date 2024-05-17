@@ -1448,13 +1448,13 @@ int alpm_db_search(alpm_db_t *db, const alpm_list_t *needles,
 /** Searches a database with regular expressions.
  * @param db pointer to the package database to search in
  * @param needles a list of regular expressions to search for
- * @param xdata a list of regular expressions to search in extended data field
+ * @param notes a list of regular expressions to search in extended data field
  * @param ret pointer to list for storing packages matching all
  * regular expressions - must point to an empty (NULL) alpm_list_t *.
  * @return 0 on success, -1 on error (pm_errno is set accordingly)
  */
-int alpm_db_search_xdata(alpm_db_t *db, const alpm_list_t *needles,
-		const alpm_list_t *xdata, alpm_list_t **ret);
+int alpm_db_search_usernote(alpm_db_t *db, const alpm_list_t *needles,
+		const alpm_list_t *notes, alpm_list_t **ret);
 
 /** The usage level of a database. */
 typedef enum _alpm_db_usage_t {
@@ -2669,24 +2669,35 @@ int alpm_pkg_get_validation(alpm_pkg_t *pkg);
  */
 alpm_list_t *alpm_pkg_get_xdata(alpm_pkg_t *pkg);
 
-/** Updates the extended data field of a package. Will overwrite
- * xdata kv-pairs with same name
- * @param pkg a pointer to package
- * @param xdata_lst a reference to a list of alpm_pkg_xdata_t objects
- * @return 0 on success, -1 on error (pm_errno is set accordingly)
- */
-int alpm_pkg_xdata_update(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst);
+// xdata prefix
+const char *alpm_get_userdata_prefix(void);
+// get all notes as list of alpm_xdata_t
+alpm_list_t *alpm_pkg_get_user_notes(alpm_pkg_t *pkg);
+// update notes with list of alpm_xdata_t
+int alpm_pkg_user_notes_update(alpm_pkg_t *pkg, const alpm_list_t *notes);
+// delete note by key
+int alpm_pkg_user_note_delete(alpm_pkg_t *pkg, const char *key);
+// free xdata struct
+void alpm_pkg_xdata_free(alpm_pkg_xdata_t *xdata);
 
+///** Updates the extended data field of a package. Will overwrite
+// * xdata kv-pairs with same name
+// * @param pkg a pointer to package
+// * @param xdata_lst a reference to a list of alpm_pkg_xdata_t objects
+// * @return 0 on success, -1 on error (pm_errno is set accordingly)
+// */
+//int alpm_pkg_xdata_update(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst);
+//
 /** Parse string into an extended data structure
  * @param string a pointer to string
  * @return a reference to xdata on success, NULL on failure
  */
 alpm_pkg_xdata_t *alpm_pkg_parse_xdata(const char *string);
-
-/** Free an extended data structure.
- * @param xdata a reference to an xdata to free
- */
-void alpm_pkg_xdata_free(alpm_pkg_xdata_t *xdata);
+//
+///** Free an extended data structure.
+// * @param xdata a reference to an xdata to free
+// */
+//void alpm_pkg_xdata_free(alpm_pkg_xdata_t *xdata);
 
 /** Returns whether the package has an install scriptlet.
  * @return 0 if FALSE, TRUE otherwise
@@ -2709,14 +2720,14 @@ off_t alpm_pkg_download_size(alpm_pkg_t *newpkg);
  */
 int alpm_pkg_set_reason(alpm_pkg_t *pkg, alpm_pkgreason_t reason);
 
-/** Set extended data field for a package in the local database.
+/** Set user notes for a package in the local database.
  * The provided package object must be from the local database or this method
  * will fail. The write to the local database is performed immediately.
  * @param pkg the package to update
- * @param xdata_lst list of \link alpm_pkg_xdata_t \endlink structures
+ * @param notes list of \link alpm_pkg_xdata_t \endlink structures
  * @return 0 on success, -1 on error (pm_errno is set accordingly)
  */
-int alpm_pkg_set_xdata(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst);
+int alpm_pkg_set_user_notes(alpm_pkg_t *pkg, const alpm_list_t *notes);
 
 
 /* End of libalpm_pkg_t accessors */

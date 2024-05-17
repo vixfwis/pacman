@@ -22,18 +22,26 @@
  */
 
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 
 /* libalpm */
 #include "package.h"
+#include "alpm.h"
 #include "alpm_list.h"
 #include "log.h"
 #include "util.h"
 #include "db.h"
 #include "handle.h"
 #include "deps.h"
+
+static const char *XDATA_USERDATA_PREFIX = "user:";
+
+const char SYMEXPORT *alpm_get_userdata_prefix(void) {
+	return XDATA_USERDATA_PREFIX;
+}
 
 int SYMEXPORT alpm_pkg_free(alpm_pkg_t *pkg)
 {
@@ -53,32 +61,54 @@ alpm_pkg_xdata_t SYMEXPORT *alpm_pkg_parse_xdata(const char *string) {
   return _alpm_pkg_parse_xdata(string);
 }
 
-int SYMEXPORT alpm_pkg_xdata_update(alpm_pkg_t *pkg, const alpm_list_t *xdata_lst) {
+alpm_list_t SYMEXPORT *alpm_pkg_get_user_notes(alpm_pkg_t *pkg) {
+	ASSERT(pkg != NULL, return NULL);
+	pkg->handle->pm_errno = ALPM_ERR_OK;
+	alpm_list_t *user_notes = NULL;
+	const char *prefix = alpm_get_userdata_prefix();
+	for(alpm_list_t *i = alpm_pkg_get_xdata(pkg); i; i = alpm_list_next(i)) {
+		alpm_pkg_xdata_t *xdata = i->data;
+		if(strncmp(xdata->name, prefix, strlen(prefix)) == 0) {
+			alpm_pkg_xdata_t *user_note = _alpm_pkg_user_note_dup(xdata, NULL);
+			memmove(user_note->name,
+					user_note->name + strlen(prefix),
+					strlen(user_note->name) - strlen(prefix) + 1);
+			user_notes = alpm_list_add(user_notes, user_note);
+		}
+	}
+	return user_notes;
+}
+
+int SYMEXPORT alpm_pkg_user_notes_update(alpm_pkg_t *pkg, const alpm_list_t *notes) {
 	ASSERT(pkg != NULL, return -1);
 	pkg->handle->pm_errno = ALPM_ERR_OK;
-	if(xdata_lst == NULL) {
+	if(notes == NULL) {
 		return 0;
 	}
+	const char *prefix = alpm_get_userdata_prefix();
 
 	alpm_list_t *pkg_xdata_lst = alpm_pkg_get_xdata(pkg);
-	for(const alpm_list_t *i = xdata_lst; i; i = alpm_list_next(i)) {
+	for(const alpm_list_t *i = notes; i; i = alpm_list_next(i)) {
 		alpm_pkg_xdata_t *xdata = i->data;
 		int found_existing_key = 0;
 		for(alpm_list_t *j = pkg_xdata_lst; j; j = alpm_list_next(j)) {
 			alpm_pkg_xdata_t *pkg_xdata = j->data;
-			if(strcmp(pkg_xdata->name, xdata->name) == 0) {
+			if(strncmp(pkg_xdata->name, prefix, strlen(prefix)) != 0) {
+				continue;
+			}
+			if(strcmp(pkg_xdata->name + strlen(prefix), xdata->name) == 0) {
 				found_existing_key = 1;
-				alpm_pkg_xdata_t *new_xdata = _alpm_pkg_xdata_dup(xdata);
+				alpm_pkg_xdata_t *new_xdata = _alpm_pkg_user_note_dup(xdata, prefix);
 				if(new_xdata == NULL) {
 					pkg->handle->pm_errno = ALPM_ERR_MEMORY;
 					return -1;
 				}
 				j->data = new_xdata;
-				alpm_pkg_xdata_free(pkg_xdata);
+				_alpm_pkg_xdata_free(pkg_xdata);
 			}
 		}
 		if(!found_existing_key) {
-			alpm_pkg_xdata_t *new_xdata = _alpm_pkg_xdata_dup(xdata);
+			alpm_pkg_xdata_t *new_xdata = _alpm_pkg_user_note_dup(xdata, prefix);
 			if(new_xdata == NULL) {
 				pkg->handle->pm_errno = ALPM_ERR_MEMORY;
 				return -1;
@@ -86,14 +116,39 @@ int SYMEXPORT alpm_pkg_xdata_update(alpm_pkg_t *pkg, const alpm_list_t *xdata_ls
 			pkg_xdata_lst = alpm_list_add(pkg_xdata_lst, new_xdata);
 		}
 	}
-	_alpm_pkg_set_xdata(pkg, pkg_xdata_lst);
+	pkg->xdata = pkg_xdata_lst;
+	return 0;
+}
+
+int SYMEXPORT alpm_pkg_user_note_delete(alpm_pkg_t *pkg, const char *key) {
+	ASSERT(pkg != NULL, return -1);
+	pkg->handle->pm_errno = ALPM_ERR_OK;
+	if(key == NULL) {
+		return 0;
+	}
+	const char *prefix = alpm_get_userdata_prefix();
+
+	alpm_list_t *pkg_xdata_lst = alpm_pkg_get_xdata(pkg);
+	alpm_list_t *to_delete = NULL;
+	for(alpm_list_t *j = pkg_xdata_lst; j; j = alpm_list_next(j)) {
+		alpm_pkg_xdata_t *pkg_xdata = j->data;
+		if(strncmp(pkg_xdata->name, prefix, strlen(prefix)) == 0
+				&& strcmp(pkg_xdata->name + strlen(prefix), key) == 0) {
+			to_delete = j;
+			break;
+		}
+	}
+	if(to_delete) {
+		pkg_xdata_lst = alpm_list_remove_item(pkg_xdata_lst, to_delete);
+		pkg->xdata = pkg_xdata_lst;
+		alpm_pkg_xdata_free(to_delete->data);
+	}
 	return 0;
 }
 
 void SYMEXPORT alpm_pkg_xdata_free(alpm_pkg_xdata_t *xdata) {
-  ASSERT(xdata != NULL, return);
-
-  _alpm_pkg_xdata_free(xdata);
+	ASSERT(xdata != NULL, return);
+	_alpm_pkg_xdata_free(xdata);
 }
 
 int SYMEXPORT alpm_pkg_checkmd5sum(alpm_pkg_t *pkg)
@@ -149,11 +204,6 @@ static alpm_list_t *_pkg_get_replaces(alpm_pkg_t *pkg)   { return pkg->replaces;
 static alpm_filelist_t *_pkg_get_files(alpm_pkg_t *pkg)  { return &(pkg->files); }
 static alpm_list_t *_pkg_get_backup(alpm_pkg_t *pkg)     { return pkg->backup; }
 static alpm_list_t *_pkg_get_xdata(alpm_pkg_t *pkg)      { return pkg->xdata; }
-
-static void _pkg_set_xdata(alpm_pkg_t *pkg, alpm_list_t *xdata_lst)
-{
-	pkg->xdata = xdata_lst;
-}
 
 static void *_pkg_changelog_open(alpm_pkg_t UNUSED *pkg)
 {
@@ -219,7 +269,6 @@ const struct pkg_operations default_pkg_ops = {
 	.get_files       = _pkg_get_files,
 	.get_backup      = _pkg_get_backup,
 	.get_xdata       = _pkg_get_xdata,
-	.set_xdata       = _pkg_set_xdata,
 
 	.changelog_open  = _pkg_changelog_open,
 	.changelog_read  = _pkg_changelog_read,
@@ -550,12 +599,6 @@ alpm_list_t SYMEXPORT *alpm_pkg_get_xdata(alpm_pkg_t *pkg)
 	return pkg->ops->get_xdata(pkg);
 }
 
-void _alpm_pkg_set_xdata(alpm_pkg_t *pkg, alpm_list_t *xdata) {
-  ASSERT(pkg != NULL, return);
-  pkg->handle->pm_errno = ALPM_ERR_OK;
-  pkg->ops->set_xdata(pkg, xdata);
-}
-
 static void find_requiredby(alpm_pkg_t *pkg, alpm_db_t *db, alpm_list_t **reqs,
 		int optional)
 {
@@ -763,12 +806,21 @@ alpm_pkg_xdata_t *_alpm_pkg_parse_xdata(const char *string)
 	return pd;
 }
 
-alpm_pkg_xdata_t *_alpm_pkg_xdata_dup(const alpm_pkg_xdata_t *xdata) {
+alpm_pkg_xdata_t *_alpm_pkg_user_note_dup(const alpm_pkg_xdata_t *xdata, const char *prefix) {
   ASSERT(xdata != NULL, return NULL);
 
   alpm_pkg_xdata_t *new_xdata;
   CALLOC(new_xdata, 1, sizeof(alpm_pkg_xdata_t), return NULL);
-  STRDUP(new_xdata->name, xdata->name, FREE(new_xdata); return NULL);
+  int key_alloc_size = strlen(xdata->name) + 1;
+  if(prefix) {
+	key_alloc_size += strlen(prefix);
+  }
+  CALLOC(new_xdata->name, 1, key_alloc_size, FREE(new_xdata); return NULL);
+  if(prefix) {
+	sprintf(new_xdata->name, "%s%s", prefix, xdata->name);
+  } else {
+	sprintf(new_xdata->name, "%s", xdata->name);
+  }
   STRDUP(new_xdata->value, xdata->value, FREE(new_xdata->name); FREE(new_xdata);
          return NULL);
   return new_xdata;

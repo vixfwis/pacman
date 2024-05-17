@@ -29,6 +29,7 @@
 /* pacman */
 #include "pacman.h"
 #include "conf.h"
+#include "src/pacman/package.h"
 #include "util.h"
 
 /**
@@ -100,18 +101,13 @@ static int change_install_reason(alpm_list_t *targets)
  *
  * @return 0 on success, 1 on failure
  */
-static int change_user_notes(alpm_list_t *targets, alpm_list_t *add, alpm_list_t *delete) {
-	alpm_list_t *i, *j, *k;
+static int change_user_notes(alpm_list_t *targets, const alpm_list_t *add, const alpm_list_t *delete) {
+	const alpm_list_t *i, *j;
 	alpm_db_t *db_local;
 	int ret = 0;
 
 	if(targets == NULL) {
 		pm_printf(ALPM_LOG_ERROR, _("no targets specified (use -h for help)\n"));
-		return 1;
-	}
-
-	if(add == NULL && delete == NULL) {
-		pm_printf(ALPM_LOG_ERROR, _("no notes specified (use -h for help)\n"));
 		return 1;
 	}
 
@@ -129,32 +125,16 @@ static int change_user_notes(alpm_list_t *targets, alpm_list_t *add, alpm_list_t
 							pkgname, alpm_strerror(alpm_errno(config->handle)));
 			ret = 1;
 			continue;
-		}else if(alpm_pkg_xdata_update(pkg, add) != 0) {
-			pm_printf(ALPM_LOG_ERROR, _("could not update extended data for %s (%s)\n"),
-							pkgname, alpm_strerror(alpm_errno(config->handle)));
-			ret = 1;
-			continue;
 		}
-		alpm_list_t *xdata = alpm_pkg_get_xdata(pkg);
-		for(j = xdata; j;) {
-			alpm_list_t *item_to_delete = NULL;
-			alpm_pkg_xdata_t *pd = j->data;
-			for(k = delete; k; k = alpm_list_next(k)) {
-				const char *delete_key = k->data;
-				if(strcmp(pd->name, delete_key) == 0) {
-					item_to_delete = j;
-				}
-			}
-			j = alpm_list_next(j);
-			if(item_to_delete) {
-				alpm_list_remove_item(xdata, item_to_delete);
-			}
+		alpm_pkg_user_notes_update(pkg, add);
+		for(j = delete; j; j = alpm_list_next(j)) {
+			const char *key = j->data;
+			alpm_pkg_user_note_delete(pkg, key);
 		}
-		if(alpm_pkg_set_xdata(pkg, xdata) != 0) {
-			pm_printf(ALPM_LOG_ERROR, _("could not set extended data for package %s (%s)\n"),
-							pkgname, alpm_strerror(alpm_errno(config->handle)));
-			ret = 1;
-		}
+		alpm_list_t *pkg_notes = alpm_pkg_get_user_notes(pkg);
+		alpm_pkg_set_user_notes(pkg, pkg_notes);
+		alpm_list_free_inner(pkg_notes, (alpm_list_fn_free)alpm_pkg_xdata_free);
+		alpm_list_free(pkg_notes);
 	}
 
 	/* Unlock database */
@@ -374,9 +354,30 @@ int pacman_database(alpm_list_t *targets)
 		ret = change_install_reason(targets);
 	}
 
-	alpm_list_t *i, *usernote_add = NULL, *usernote_delete = NULL;
-	for(i = config->user_note; i; i = alpm_list_next(i)) {
+	if(config->user_note || config->user_note_extra || config->user_note_delete) {
+		alpm_list_t *i, *usernote_add = NULL;
+		for(i = config->user_note; i; i = alpm_list_next(i)) {
+			const char *arg = i->data;
+			const char *key = get_default_user_note_key();
+			char *full_note = calloc(1, strlen(key) + 1 + strlen(arg) + 1);
+			sprintf(full_note, "%s=%s", key, arg);
+			alpm_pkg_xdata_t *user_note = alpm_pkg_parse_xdata(full_note);
+			free(full_note);
+			usernote_add = alpm_list_add(usernote_add, user_note);
+		}
 
+		for(i = config->user_note_extra; i; i = alpm_list_next(i)) {
+			const char *arg = i->data;
+			alpm_pkg_xdata_t *user_note = alpm_pkg_parse_xdata(arg);
+			if(user_note == NULL) {
+				pm_printf(ALPM_LOG_ERROR, "failed to parse user note '%s'\n", arg);
+				return -1;
+			}
+			usernote_add = alpm_list_add(usernote_add, user_note);
+		}
+		change_user_notes(targets, usernote_add, config->user_note_delete);
+		alpm_list_free_inner(usernote_add, (alpm_list_fn_free)alpm_pkg_xdata_free);
+		alpm_list_free(usernote_add);
 	}
 
 	return ret;
