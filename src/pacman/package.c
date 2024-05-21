@@ -612,7 +612,7 @@ int dump_pkg_search(alpm_db_t *db, alpm_list_t *targets, int show_status)
 				alpm_list_t *pkg_notes = alpm_pkg_get_user_notes(pkg);
 				for(j = pkg_notes; j; j = alpm_list_next(j)) {
 					alpm_pkg_xdata_t *xdata = j->data;
-					char *user_note = calloc(1, strlen(xdata->name) + strlen(xdata->value) + 1);
+					char *user_note = calloc(1, strlen(xdata->name) + 1 + strlen(xdata->value) + 1);
 					fputs("\n    ", stdout);
 					sprintf(user_note, "%s=%s", xdata->name, xdata->value);
 					indentprint(user_note, 4, cols);

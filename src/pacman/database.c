@@ -28,8 +28,8 @@
 
 /* pacman */
 #include "pacman.h"
+#include "package.h"
 #include "conf.h"
-#include "src/pacman/package.h"
 #include "util.h"
 
 /**
@@ -102,7 +102,7 @@ static int change_install_reason(alpm_list_t *targets)
  * @return 0 on success, 1 on failure
  */
 static int change_user_notes(alpm_list_t *targets, const alpm_list_t *add, const alpm_list_t *delete) {
-	const alpm_list_t *i, *j;
+	const alpm_list_t *i;
 	alpm_db_t *db_local;
 	int ret = 0;
 
@@ -126,11 +126,8 @@ static int change_user_notes(alpm_list_t *targets, const alpm_list_t *add, const
 			ret = 1;
 			continue;
 		}
+		alpm_pkg_user_notes_delete(pkg, delete);
 		alpm_pkg_user_notes_update(pkg, add);
-		for(j = delete; j; j = alpm_list_next(j)) {
-			const char *key = j->data;
-			alpm_pkg_user_note_delete(pkg, key);
-		}
 		alpm_list_t *pkg_notes = alpm_pkg_get_user_notes(pkg);
 		alpm_pkg_set_user_notes(pkg, pkg_notes);
 		alpm_list_free_inner(pkg_notes, (alpm_list_fn_free)alpm_pkg_xdata_free);

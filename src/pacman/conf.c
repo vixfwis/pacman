@@ -35,8 +35,6 @@
 
 /* pacman */
 #include "conf.h"
-#include "alpm.h"
-#include "alpm_list.h"
 #include "ini.h"
 #include "util.h"
 #include "callback.h"

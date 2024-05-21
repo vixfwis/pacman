@@ -1213,14 +1213,20 @@ int SYMEXPORT alpm_pkg_set_user_notes(alpm_pkg_t *pkg, const alpm_list_t *notes)
 	ASSERT(pkg->origin_data.db == pkg->handle->db_local,
 			RET_ERR(pkg->handle, ALPM_ERR_WRONG_ARGS, -1));
 	pkg->handle->pm_errno = ALPM_ERR_OK;
+	const char *prefix = alpm_get_userdata_prefix();
 
-	alpm_list_t *pkg_notes = alpm_pkg_get_user_notes(pkg);
-	for(alpm_list_t *i = pkg_notes; i; i = alpm_list_next(i)) {
-		alpm_pkg_xdata_t *note = i->data;
-		alpm_pkg_user_note_delete(pkg, note->name);
+	alpm_list_t *pkg_xdata = alpm_pkg_get_xdata(pkg);
+	alpm_list_t *new_pkg_xdata = NULL;
+	for(alpm_list_t *i = pkg_xdata; i; i = alpm_list_next(i)) {
+		alpm_pkg_xdata_t *xdata = i->data;
+		if(strncmp(xdata->name, prefix, strlen(prefix)) != 0) {
+			alpm_pkg_xdata_t *tmp = _alpm_pkg_xdata_dup(xdata);
+			alpm_list_append(&new_pkg_xdata, tmp);
+		}
 	}
-	alpm_list_free_inner(pkg_notes, (alpm_list_fn_free)alpm_pkg_xdata_free);
-	alpm_list_free(pkg_notes);
+	pkg->xdata = new_pkg_xdata;
+	alpm_list_free_inner(pkg_xdata, (alpm_list_fn_free)alpm_pkg_xdata_free);
+	alpm_list_free(pkg_xdata);
 	alpm_pkg_user_notes_update(pkg, notes);
 
 	/* write DESC */

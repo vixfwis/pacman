@@ -1223,9 +1223,7 @@ static int load_packages(alpm_handle_t *handle, alpm_list_t **data,
 			continue;
 		}
 		free(filepath);
-		/* update user notes again. if we're here,
-		 * package struct is being replaced from file
-		 * */
+		/* copy user notes */
 		alpm_list_t *user_notes = alpm_pkg_get_user_notes(spkg);
 		alpm_pkg_user_notes_update(pkgfile, user_notes);
 		alpm_list_free_inner(user_notes, (alpm_list_fn_free)alpm_pkg_xdata_free);

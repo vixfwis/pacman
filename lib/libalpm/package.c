@@ -22,14 +22,12 @@
  */
 
 #include <limits.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 
 /* libalpm */
 #include "package.h"
-#include "alpm.h"
 #include "alpm_list.h"
 #include "log.h"
 #include "util.h"
@@ -120,29 +118,36 @@ int SYMEXPORT alpm_pkg_user_notes_update(alpm_pkg_t *pkg, const alpm_list_t *not
 	return 0;
 }
 
-int SYMEXPORT alpm_pkg_user_note_delete(alpm_pkg_t *pkg, const char *key) {
+int SYMEXPORT alpm_pkg_user_notes_delete(alpm_pkg_t *pkg, const alpm_list_t *keys) {
 	ASSERT(pkg != NULL, return -1);
 	pkg->handle->pm_errno = ALPM_ERR_OK;
-	if(key == NULL) {
+	if(keys == NULL) {
 		return 0;
 	}
 	const char *prefix = alpm_get_userdata_prefix();
 
 	alpm_list_t *pkg_xdata_lst = alpm_pkg_get_xdata(pkg);
-	alpm_list_t *to_delete = NULL;
+	alpm_list_t *new_pkg_xdata_lst = NULL;
 	for(alpm_list_t *j = pkg_xdata_lst; j; j = alpm_list_next(j)) {
 		alpm_pkg_xdata_t *pkg_xdata = j->data;
-		if(strncmp(pkg_xdata->name, prefix, strlen(prefix)) == 0
-				&& strcmp(pkg_xdata->name + strlen(prefix), key) == 0) {
-			to_delete = j;
-			break;
+		int skip_key = 0;
+		for(const alpm_list_t *i = keys; i; i = alpm_list_next(i)) {
+			const char *key = i->data;
+			if(strncmp(pkg_xdata->name, prefix, strlen(prefix)) == 0
+					&& strcmp(pkg_xdata->name + strlen(prefix), key) == 0) {
+				skip_key = 1;
+				break;
+			}
+		}
+		if(!skip_key) {
+			printf("dup %s\n", pkg_xdata->name);
+			alpm_pkg_xdata_t *tmp = _alpm_pkg_xdata_dup(pkg_xdata);
+			alpm_list_append(&new_pkg_xdata_lst, tmp);
 		}
 	}
-	if(to_delete) {
-		pkg_xdata_lst = alpm_list_remove_item(pkg_xdata_lst, to_delete);
-		pkg->xdata = pkg_xdata_lst;
-		alpm_pkg_xdata_free(to_delete->data);
-	}
+	pkg->xdata = new_pkg_xdata_lst;
+	alpm_list_free_inner(pkg_xdata_lst, (alpm_list_fn_free)alpm_pkg_xdata_free);
+	alpm_list_free(pkg_xdata_lst);
 	return 0;
 }
 
@@ -802,6 +807,16 @@ alpm_pkg_xdata_t *_alpm_pkg_parse_xdata(const char *string)
 	CALLOC(pd, 1, sizeof(alpm_pkg_xdata_t), return NULL);
 	STRNDUP(pd->name, string, sep - string, FREE(pd); return NULL);
 	STRDUP(pd->value, sep + 1, FREE(pd->name); FREE(pd); return NULL);
+
+	return pd;
+}
+
+alpm_pkg_xdata_t *_alpm_pkg_xdata_dup(const alpm_pkg_xdata_t *xdata) {
+	alpm_pkg_xdata_t *pd;
+
+	CALLOC(pd, 1, sizeof(alpm_pkg_xdata_t), return NULL);
+	STRDUP(pd->name, xdata->name, FREE(pd); return NULL);
+	STRDUP(pd->value, xdata->value, FREE(pd->name); FREE(pd); return NULL);
 
 	return pd;
 }
